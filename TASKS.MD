@@ -52,3 +52,9 @@
 - [x] Update `src/services/chromeAiService.ts` and `src/components/TelemetryViewer.tsx` so telemetry register labels, AI root causes, and 1-click remediation actions adapt to the active device category (e.g., USB 3.0 UVC Bandwidth & 5V VBUS rail for BRIO Webcams vs. 2.4GHz RF & Li-Po Battery for Wireless Mice/Keyboards)
 - [x] Update `src/components/DeviceSelector.tsx`, `src/components/SupportBotDrawer.tsx`, and `src/App.tsx` to pass `device.category` and trigger immediate telemetry refresh when switching devices
 - [x] Add unit tests for Webcam (BRIO) & Category-Specific diagnostics, verify with `npm test` and `npm run build`, and update `lessons.md`
+
+## Phase 9: `support.logi.com` ("Logitech Assistant / Logan") Injector & Chrome Extension
+- [x] Create `public/logi_assistant_injector.js` (Zero-dependency, CSP-safe DOM injector that embeds WebHID + Chrome AI diagnostics directly into the Logitech Assistant / Logan chatbot on `support.logi.com`)
+- [x] Create `chrome-extension/manifest.json` (`"world": "MAIN"`) and `chrome-extension/content.js` for zero-DevTools auto-injection on `support.logi.com`
+- [x] Update `src/components/SupportBotDrawer.tsx` with Logan branding and a 1-click **"Copy `support.logi.com` Injector Script"** button
+- [x] Add unit tests, run `npm test` and `npm run build`, and update `lessons.md` and `walkthrough.md`

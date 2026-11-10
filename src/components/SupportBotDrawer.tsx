@@ -9,6 +9,9 @@ import {
   Bot,
   User,
   Sparkles,
+  Copy,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 import {
   ResolutionActionType,
@@ -70,14 +73,30 @@ export const SupportBotDrawer: React.FC<SupportBotDrawerProps> = ({
   const symptomPresets = getSymptomPresets(deviceCategory);
   const [inputText, setInputText] = useState('');
   const [showRawBridgeJson, setShowRawBridgeJson] = useState(false);
+  const [copiedInjector, setCopiedInjector] = useState(false);
   const [messages, setMessages] = useState<SupportChatMessage[]>(() => [
     {
       id: 'msg-welcome',
       sender: 'bot',
-      text: 'Hi! Instead of asking 20 manual troubleshooting questions, I can run an instant On-Device WebHID + Chrome AI hardware scan right in your browser (0 bytes sent to the cloud). Describe your issue or pick a symptom below:',
+      text: "Hi, I'm Logan! Instead of asking 20 manual troubleshooting questions, I can run an instant On-Device WebHID + Chrome AI hardware scan right in your browser (0 bytes sent to the cloud). Describe your issue or pick a symptom below:",
       timestamp: new Date().toLocaleTimeString(),
     },
   ]);
+
+  const handleCopyInjectorScript = async () => {
+    try {
+      const res = await fetch('/logi_assistant_injector.js');
+      const scriptText = await res.text();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(scriptText);
+      }
+      setCopiedInjector(true);
+      setTimeout(() => setCopiedInjector(false), 3000);
+    } catch {
+      setCopiedInjector(true);
+      setTimeout(() => setCopiedInjector(false), 3000);
+    }
+  };
 
   const handleSendSymptom = (text: string) => {
     const trimmed = text.trim();
@@ -113,31 +132,31 @@ export const SupportBotDrawer: React.FC<SupportBotDrawerProps> = ({
         <MessageSquare className="w-4 h-4" />
         <span>Test in Support Bot Sandbox</span>
         <span className="px-2 py-0.5 rounded-full bg-slate-950/50 text-[10px] font-mono text-cyan-200">
-          postMessage Live
+          Logan Live
         </span>
       </button>
     );
   }
 
   return (
-    <aside className="fixed bottom-4 right-4 z-50 w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col max-h-[84vh] overflow-hidden">
-      {/* Bot Header */}
-      <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+    <aside className="fixed bottom-4 right-4 z-50 w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col max-h-[86vh] overflow-hidden">
+      {/* Bot Header matching Logitech Assistant ("Logan") */}
+      <div className="p-3.5 bg-[#232528] border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center">
-            <Bot className="w-4 h-4 text-white" />
+          <div className="w-8 h-8 rounded-full bg-[#c3e703] text-slate-950 font-black text-[11px] tracking-tight flex items-center justify-center shrink-0">
+            logi
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-xs font-bold text-white">
-                CX Support Bot Test Harness
+                Logitech Assistant (Logan)
               </h3>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                 allow=&quot;hid&quot;
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Simulates Zendesk / Intercom + <code className="font-mono">window.postMessage</code>
+              CX Support Bot Harness + <code className="font-mono">support.logi.com</code> Injector
             </p>
           </div>
         </div>
@@ -166,6 +185,42 @@ export const SupportBotDrawer: React.FC<SupportBotDrawerProps> = ({
         </div>
       </div>
 
+      {/* Live support.logi.com Injection Strip */}
+      <div className="px-3.5 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-2">
+        <div className="text-[11px] text-slate-300 leading-tight">
+          <span className="font-semibold text-[#c3e703]">Demo on support.logi.com:</span>{' '}
+          Copy script &amp; paste in DevTools Console (or load <code className="font-mono text-cyan-300">chrome-extension/</code>)
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={handleCopyInjectorScript}
+            className="px-2.5 py-1.5 rounded-lg bg-[#c3e703] hover:bg-[#d4f527] text-slate-950 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition"
+          >
+            {copiedInjector ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                <span>Copied Script!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copy Injector Script</span>
+              </>
+            )}
+          </button>
+          <a
+            href="/logi_assistant_injector.js"
+            target="_blank"
+            rel="noreferrer"
+            title="Open raw logi_assistant_injector.js"
+            className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-white"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </div>
+
       {/* Chat Conversation Stream */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-900/95">
         {messages.map((m) => (
@@ -179,7 +234,7 @@ export const SupportBotDrawer: React.FC<SupportBotDrawerProps> = ({
               className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
                 m.sender === 'customer'
                   ? 'bg-cyan-600 text-white'
-                  : 'bg-slate-800 text-cyan-400 border border-slate-700'
+                  : 'bg-[#c3e703] text-slate-950 font-extrabold text-[9px]'
               }`}
             >
               {m.sender === 'customer' ? (
@@ -300,10 +355,10 @@ export const SupportBotDrawer: React.FC<SupportBotDrawerProps> = ({
         />
         <button
           type="submit"
-          className="p-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white cursor-pointer transition"
-          title="Send message to Support Bot"
+          className="px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
         >
           <Send className="w-3.5 h-3.5" />
+          <span>Ask Bot</span>
         </button>
       </form>
     </aside>

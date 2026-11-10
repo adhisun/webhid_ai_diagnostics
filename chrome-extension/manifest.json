@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Logitech Assistant (Logan) — WebHID + Chrome AI Diagnostics",
+  "version": "1.0.0",
+  "description": "Injects Zero-Friction On-Device WebHID Telemetry & Chrome AI (Gemini Nano) Root-Cause Diagnostics into the Logitech Assistant chatbot on support.logi.com.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://support.logi.com/*",
+        "https://support.logitech.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ]
+}

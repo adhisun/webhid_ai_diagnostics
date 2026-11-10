@@ -16,7 +16,8 @@ describe('App Component Full-Stack Integration', () => {
     expect(html).toContain('Step 4 · One-Click Automated Hardware Resolution');
     expect(html).toContain('USB 3.0 / 2.4GHz RF Spectrum Interference Detected');
     expect(html).toContain('Zero-Leak: 0 B Egress');
-    expect(html).toContain('CX Support Bot Test Harness');
+    expect(html).toContain('Logitech Assistant (Logan)');
+    expect(html).toContain('Copy Injector Script');
     expect(html).toContain('In-Chat 1-Click Fix');
   });
 });

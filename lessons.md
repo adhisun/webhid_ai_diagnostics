@@ -52,3 +52,13 @@
 4. **Bug / Gotcha #4: TypeScript `Uint8Array.buffer` vs `ArrayBuffer` in `sendReport`**
    - **What happened**: In newer TypeScript DOM lib versions (`ES2022+`), `Uint8Array.buffer` is typed as `ArrayBufferLike` (which includes `SharedArrayBuffer`), whereas `HIDDevice.sendReport` expects `BufferSource`.
    - **How we fixed it**: Explicitly typed and passed the `ArrayBuffer` view cleanly so strict TypeScript (`tsc --noEmit`) compiles with zero warnings.
+
+
+5. **Device Category-Specific Telemetry vs. Generic Mouse Profiles**:
+   - **What happened**: When a user selected a wired/USB 3.0 Webcam (`Logitech BRIO`) from the dropdown, the UI initially displayed wireless mouse fault cards (`2.4GHz RF Dropouts`, `Battery Cell Sag`, `125Hz Polling Rate Desync`).
+   - **Why**: Webcams, Keyboards, Headsets, and Mice share the same underlying byte offsets in our diagnostic frame parser, but their physical failure modes are completely different (e.g., BRIO uses USB 3.0 SuperSpeed UVC Isochronous bandwidth, 5V USB VBUS power rails, and MIPI Autofocus / RightLight HDR NVRAM registers).
+   - **How we fixed it**: Added `getScenarioDescriptorsForCategory(category)` in `src/services/simulatorService.ts` and category-aware branches in `src/services/chromeAiService.ts` and `src/components/TelemetryViewer.tsx`.
+
+6. **Injecting WebHID + Chrome AI into Live `support.logi.com` ("Logitech Assistant / Logan")**:
+   - **What happened**: `https://support.logi.com/hc/en-us` runs over HTTPS with strict Content Security Policy (`CSP`) headers that block external `http://localhost:5173` iframes, and third-party chat iframes do not have `allow="hid"` in production.
+   - **How we solved it**: Built a zero-dependency, CSP-safe self-contained DOM injector (`public/logi_assistant_injector.js`) and an Unpacked Manifest V3 Chrome Extension (`chrome-extension/` with `"world": "MAIN"`). Running in the top-level `support.logi.com` `MAIN` world grants direct native access to `navigator.hid` (WebHID) and `window.ai.languageModel` (Gemini Nano) inside a Logan-styled chat widget without triggering any CSP or mixed-content blocks.
