@@ -8,19 +8,23 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { TelemetryFrame } from '../types/diagnostics';
+import { WebHIDDeviceData } from '../types/webhid';
 
 interface TelemetryViewerProps {
   currentFrame: TelemetryFrame;
   frameHistory: TelemetryFrame[];
+  deviceCategory?: WebHIDDeviceData['category'];
   onSampleNextFrame: () => void;
 }
 
 export const TelemetryViewer: React.FC<TelemetryViewerProps> = ({
   currentFrame,
   frameHistory,
+  deviceCategory = 'Mice & Trackballs',
   onSampleNextFrame,
 }) => {
   const { metrics } = currentFrame;
+  const isWebcam = deviceCategory === 'Webcams & ConferenceCams';
 
   const isRfBad = metrics.packetDropRatePct >= 10 || metrics.rssiDbm <= -75;
   const isBattBad =
@@ -55,7 +59,7 @@ export const TelemetryViewer: React.FC<TelemetryViewerProps> = ({
 
         {/* 4 Metric Cards */}
         <div className="grid grid-cols-2 gap-3 mt-4">
-          {/* RF Signal & Drop Rate */}
+          {/* RF Signal / UVC Frame Drop Rate */}
           <div
             className={`p-3.5 rounded-xl border ${
               isRfBad
@@ -64,7 +68,9 @@ export const TelemetryViewer: React.FC<TelemetryViewerProps> = ({
             }`}
           >
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>2.4GHz RF / Packet Loss</span>
+              <span>
+                {isWebcam ? 'UVC Stream / Frame Drop' : '2.4GHz RF / Packet Loss'}
+              </span>
               <Radio
                 className={`w-4 h-4 ${
                   isRfBad ? 'text-rose-400' : 'text-emerald-400'
@@ -81,18 +87,18 @@ export const TelemetryViewer: React.FC<TelemetryViewerProps> = ({
                   isRfBad ? 'text-rose-300' : 'text-emerald-300'
                 }`}
               >
-                {metrics.rssiDbm} dBm
+                {isWebcam ? 'Isochronous' : `${metrics.rssiDbm} dBm`}
               </span>
             </div>
             <div className="mt-2 text-[11px] text-slate-400">
-              USB 3.0 Noise Floor:{' '}
+              {isWebcam ? 'USB Bus Contention:' : 'USB 3.0 Noise Floor:'}{' '}
               <span className="font-mono text-slate-200">
                 {metrics.usb3NoiseFloorDb} dB
               </span>
             </div>
           </div>
 
-          {/* Battery Voltage & Impedance */}
+          {/* Battery Voltage / VBUS Rail */}
           <div
             className={`p-3.5 rounded-xl border ${
               isBattBad
@@ -101,7 +107,9 @@ export const TelemetryViewer: React.FC<TelemetryViewerProps> = ({
             }`}
           >
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Li-Po Cell / Impedance</span>
+              <span>
+                {isWebcam ? 'USB VBUS Rail / Cable Ω' : 'Li-Po Cell / Impedance'}
+              </span>
               <BatteryCharging
                 className={`w-4 h-4 ${
                   isBattBad ? 'text-amber-400' : 'text-emerald-400'
@@ -122,7 +130,7 @@ export const TelemetryViewer: React.FC<TelemetryViewerProps> = ({
               </span>
             </div>
             <div className="mt-2 text-[11px] text-slate-400">
-              Estimated SOC:{' '}
+              {isWebcam ? 'Regulator Margin:' : 'Estimated SOC:'}{' '}
               <span className="font-mono text-slate-200">
                 {metrics.batteryLevelPct}%
               </span>

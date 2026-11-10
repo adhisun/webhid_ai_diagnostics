@@ -7,6 +7,10 @@ describe('App Component Full-Stack Integration', () => {
     const html = renderToString(<App />);
     expect(html).toContain('Zero-Friction Hardware Diagnostics');
     expect(html).toContain('Step 1 · Hardware Ingestion Source');
+    expect(html).toContain('Logitech MX Keys S Advanced Illuminated Keyboard');
+    expect(html).toContain('Logitech Zone Wireless 2 AI ANC Headset');
+    expect(html).toContain('Logitech MX Brio 4K Ultra HD Webcam');
+    expect(html).toContain('Logitech Logi Bolt USB Receiver');
     expect(html).toContain('Step 2 · Live WebHID Telemetry Stream');
     expect(html).toContain('Step 3 · On-Device Chrome AI Diagnosis');
     expect(html).toContain('Step 4 · One-Click Automated Hardware Resolution');

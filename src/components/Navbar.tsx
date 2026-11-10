@@ -64,8 +64,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             }
           >
             <Usb className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-slate-300 font-medium">
-              {device.isSimulated ? 'Simulator: MX Master 3S' : device.productName}
+            <span className="text-slate-300 font-medium truncate max-w-[220px]">
+              {device.productName}
             </span>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           </div>

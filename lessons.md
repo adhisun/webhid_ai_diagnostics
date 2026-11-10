@@ -25,6 +25,14 @@
 - **Context**: Enterprise CX bots (Zendesk, Intercom, Salesforce Service Cloud) run on cloud servers, whereas WebHID + Chrome AI runs inside the customer's local browser tab. Furthermore, browsers block `navigator.hid` inside cross-origin iframes unless `allow="hid"` is explicitly set on the `<iframe>`.
 - **Decision**: Created `supportBotBridge.ts` and `SupportBotDrawer.tsx` to emit a sanitized `CX_HARDWARE_DIAGNOSIS_RESULT` event via `window.postMessage` containing the plain-English condition, ticket outcome (`RESOLVED_RMA_DEFLECTED` vs `DIAGNOSED_AWAITING_FIX`), and the cryptographic Zero-Leak audit digest—allowing the support bot to auto-deflect tickets without ever touching raw hardware bytes.
 
+### Decision 6: Multi-Category Logitech Catalog & Connected WebHID Enumeration (`getDevices()`)
+- **Context**: Logitech's peripheral ecosystem spans far beyond mice—including Keyboards (`MX Keys S`, `ERGO K860`), Headsets (`Zone Wireless 2`, `G PRO X 2`), Webcams (`MX Brio 4K`, `Rally Bar`), Gaming (`G PRO X SUPERLIGHT 2` at 4000Hz), and USB Receivers (`Logi Bolt`, `Unifying`, `LIGHTSPEED`).
+- **Decision**: Added a categorized `<select>` dropdown in `DeviceSelector.tsx` backed by `LOGITECH_DEVICE_CATALOG` (22 models across 6 categories) plus automatic enumeration of physically connected WebHID devices via `navigator.hid.getDevices()`, dynamically adjusting firmware prefixes and nominal polling rates per device.
+
+### Decision 7: Category-Specific Diagnostic Profiles & Remedies (e.g., Wired UVC Webcams vs. Wireless Mice)
+- **Context**: When pairing a wired USB 3.0 webcam like the **Logitech BRIO** (`0x046D:0x085E`), generic wireless mouse fault profiles ("2.4GHz RF Interference" or "Li-Po Battery Drain") don't match the physical hardware. A webcam experiences **USB 2.0 Fallback / UVC Isochronous Frame Drops**, **USB VBUS 5V Power Droop on Unpowered Hubs**, and **MIPI Autofocus / RightLight HDR NVRAM Desync**.
+- **Decision**: Implemented `getScenarioDescriptorsForCategory(category)` in `simulatorService.ts` and category-aware telemetry labels & AI remedies in `chromeAiService.ts`, `TelemetryViewer.tsx`, and `SupportBotDrawer.tsx` so switching between a Webcam, Headset, Keyboard, or Mouse dynamically adapts the scenario cards, register names, AI prompts, and 1-click fixes.
+
 ---
 
 ## 2. Bugs & Gotchas Encountered and How We Fixed Them

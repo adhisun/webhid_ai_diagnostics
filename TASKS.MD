@@ -40,3 +40,15 @@
 - [x] Wire `SupportBotDrawer` and `supportBotBridge` into `src/App.tsx` and `src/components/Navbar.tsx`
 - [x] Add unit & integration tests for the Support Bot bridge and verify with `npm test` and `npm run build`
 - [x] Update `lessons.md` and `project_explained.html` with the Support Chatbot `postMessage` & `iframe allow="hid"` architecture
+
+## Phase 7: Logitech Multi-Category Device Catalog Dropdown & Connected WebHID Discovery
+- [x] Expand `src/types/webhid.ts` with `LOGITECH_DEVICE_CATALOG` covering Mice, Keyboards, Headsets, Webcams, Gaming G-Series, and USB Receivers
+- [x] Update `src/services/webhidService.ts` and `src/services/simulatorService.ts` to enumerate paired physical WebHID devices (`getDevices()`) and generate device-specific telemetry (firmware prefixes, polling rates, and device metadata)
+- [x] Update `src/components/DeviceSelector.tsx` and `src/App.tsx` to include a categorized Logitech Device Dropdown + Connected Physical Devices selector
+- [x] Add unit tests in `src/services/__tests__/services.test.ts` and `src/__tests__/App.test.tsx`, run `npm test` and `npm run build`, and update `lessons.md`
+
+## Phase 8: Category-Specific Fault Profiles & AI Diagnostics (Webcams/BRIO, Keyboards, Headsets, Mice)
+- [x] Update `src/services/simulatorService.ts` with `getScenarioDescriptorsForCategory(category)` so Webcams (like Logitech BRIO), Keyboards, Headsets, and Mice display authentic category-specific fault profiles
+- [x] Update `src/services/chromeAiService.ts` and `src/components/TelemetryViewer.tsx` so telemetry register labels, AI root causes, and 1-click remediation actions adapt to the active device category (e.g., USB 3.0 UVC Bandwidth & 5V VBUS rail for BRIO Webcams vs. 2.4GHz RF & Li-Po Battery for Wireless Mice/Keyboards)
+- [x] Update `src/components/DeviceSelector.tsx`, `src/components/SupportBotDrawer.tsx`, and `src/App.tsx` to pass `device.category` and trigger immediate telemetry refresh when switching devices
+- [x] Add unit tests for Webcam (BRIO) & Category-Specific diagnostics, verify with `npm test` and `npm run build`, and update `lessons.md`

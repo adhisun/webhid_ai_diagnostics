@@ -1,6 +1,7 @@
 import {
   LOGITECH_VENDOR_ID,
   LOGITECH_PRODUCTS,
+  LOGITECH_DEVICE_CATALOG,
   HIDPP_REPORT_ID,
   NativeHID,
   NativeHIDDevice,
@@ -75,22 +76,12 @@ export function encodeFlagBitmask(flags: string[]): number {
 
 /**
  * Decodes a 20-byte HID++ 2.0 telemetry report (or custom hex buffer) into structured hardware metrics.
- * Layout convention (after reportId byte):
- * [0]: Device Index (0xFF or 0x01)
- * [1]: Feature Index (0x18 = RF, 0x10 = Battery, 0x03 = Firmware)
- * [2..3]: Battery Voltage in mV (Uint16 Big Endian, e.g., 0x0F3C = 3900mV)
- * [4]: Packet Drop Rate % (0 - 100)
- * [5]: Absolute RSSI dBm magnitude (e.g., 52 => -52 dBm)
- * [6]: Cell Internal Impedance * 100 (e.g., 9 => 0.09 Ohms, 42 => 0.42 Ohms)
- * [7]: Hardware Error Bitmask
- * [8..9]: Polling Rate Hz (Uint16 Big Endian, e.g., 0x03E8 = 1000Hz)
- * [10]: USB 3.0 2.4GHz Noise Floor dB
- * [11]: Firmware Build Patch (0x24 = B0036 nominal, < 0x20 = outdated)
  */
 export function parseHidReportToFrame(
   reportId: number,
   data: DataView,
-  scenario: ScenarioId = 'custom_hex'
+  scenario: ScenarioId = 'custom_hex',
+  firmwarePrefix = 'RQR24.01'
 ): TelemetryFrame {
   const getByte = (idx: number, fallback: number): number =>
     idx < data.byteLength ? data.getUint8(idx) : fallback;
@@ -116,14 +107,18 @@ export function parseHidReportToFrame(
   const errorFlags = decodeFlagBitmask(flagByte);
 
   const rawPolling = (getByte(8, 0x03) << 8) | getByte(9, 0xe8);
-  const pollingRateHz = rawPolling >= 60 && rawPolling <= 4000 ? rawPolling : 1000;
+  const pollingRateHz = rawPolling >= 60 && rawPolling <= 8000 ? rawPolling : 1000;
 
   const usb3NoiseFloorDb = getByte(10, 12);
   const fwBuildByte = getByte(11, 0x24);
-  const firmwareVersion =
+  const basePrefix =
     fwBuildByte < 0x20
-      ? `RQR24.00_B00${fwBuildByte.toString(16).toUpperCase().padStart(2, '0')}`
-      : `RQR24.01_B00${fwBuildByte.toString(16).toUpperCase().padStart(2, '0')}`;
+      ? firmwarePrefix.replace(/\.\d+$/, '.00')
+      : firmwarePrefix;
+  const firmwareVersion = `${basePrefix}_B00${fwBuildByte
+    .toString(16)
+    .toUpperCase()
+    .padStart(2, '0')}`;
 
   const nvramSyncValid = (flagByte & 0x10) === 0;
 
@@ -151,6 +146,136 @@ export function parseHidReportToFrame(
   };
 }
 
+export function inferLogitechCategory(
+  productId: number,
+  productName: string
+): { category: WebHIDDeviceData['category']; protocol: string; firmwarePrefix: string } {
+  const catalogMatch = LOGITECH_DEVICE_CATALOG.find(
+    (entry) => entry.productId === productId
+  );
+  if (catalogMatch) {
+    return {
+      category: catalogMatch.category,
+      protocol: catalogMatch.protocol,
+      firmwarePrefix: catalogMatch.firmwarePrefix,
+    };
+  }
+
+  const lower = (productName || '').toLowerCase();
+  if (
+    lower.includes('brio') ||
+    lower.includes('webcam') ||
+    lower.includes('rally') ||
+    lower.includes('meetup') ||
+    lower.includes('streamcam') ||
+    lower.includes('c92') ||
+    lower.includes('c93')
+  ) {
+    return {
+      category: 'Webcams & ConferenceCams',
+      protocol: 'USB 3.0 UVC + HID Telemetry',
+      firmwarePrefix: 'BRI02.09',
+    };
+  }
+  if (
+    lower.includes('zone') ||
+    lower.includes('headset') ||
+    lower.includes('vibe') ||
+    lower.includes('h820')
+  ) {
+    return {
+      category: 'Headsets & Audio',
+      protocol: 'USB-C HID Audio + BLE Telemetry',
+      firmwarePrefix: 'ZNW02.14',
+    };
+  }
+  if (
+    lower.includes('key') ||
+    lower.includes('k860') ||
+    lower.includes('k380') ||
+    lower.includes('mechanical') ||
+    lower.includes('g915')
+  ) {
+    return {
+      category: 'Keyboards',
+      protocol: 'HID++ 2.0 (Logi Bolt / BLE)',
+      firmwarePrefix: 'RQR52.01',
+    };
+  }
+  if (
+    lower.includes('bolt') ||
+    lower.includes('unifying') ||
+    lower.includes('receiver') ||
+    lower.includes('dongle')
+  ) {
+    return {
+      category: 'USB Receivers & Dongles',
+      protocol: 'HID++ 2.0 Multi-Slot USB Receiver',
+      firmwarePrefix: 'RPR05.02',
+    };
+  }
+  if (lower.includes('superlight') || lower.includes('g502') || lower.includes('lightspeed')) {
+    return {
+      category: 'Gaming (Logitech G)',
+      protocol: 'HID++ 2.0 (LIGHTSPEED)',
+      firmwarePrefix: 'GPR32.04',
+    };
+  }
+
+  return {
+    category: 'Connected Physical HID',
+    protocol: 'Live WebHID USB/Bluetooth Interface',
+    firmwarePrefix: 'RQR24.01',
+  };
+}
+
+export function mapNativeDeviceToData(
+  device: NativeHIDDevice,
+  index = 0
+): WebHIDDeviceData {
+  const productName =
+    device.productName ||
+    LOGITECH_PRODUCTS[device.productId] ||
+    `HID Peripheral (0x${device.vendorId.toString(16).toUpperCase()}:0x${device.productId
+      .toString(16)
+      .toUpperCase()})`;
+
+  const inferred = inferLogitechCategory(device.productId, productName);
+
+  return {
+    id: `phys-${device.vendorId}-${device.productId}-${index}`,
+    vendorId: device.vendorId,
+    productId: device.productId,
+    productName,
+    category: inferred.category,
+    protocol: inferred.protocol,
+    opened: device.opened,
+    collections: (device.collections || []).map((c) => ({
+      usagePage: c.usagePage ?? 0xff00,
+      usage: c.usage ?? 0x0001,
+    })),
+    isSimulated: false,
+  };
+}
+
+export async function getAuthorizedPhysicalWebHIDDevices(): Promise<
+  Array<{ deviceData: WebHIDDeviceData; nativeDevice: NativeHIDDevice }>
+> {
+  if (!isWebHIDSupported()) {
+    return [];
+  }
+  try {
+    const hid = (navigator as unknown as { hid: NativeHID }).hid;
+    const devices = await hid.getDevices();
+    return (devices || []).map((dev, idx) => ({
+      deviceData: mapNativeDeviceToData(dev, idx),
+      nativeDevice: dev,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function requestPhysicalWebHIDDevice(
   filterLogitechOnly = false
 ): Promise<{ deviceData: WebHIDDeviceData; nativeDevice: NativeHIDDevice } | null> {
@@ -171,24 +296,10 @@ export async function requestPhysicalWebHIDDevice(
     await device.open();
   }
 
-  const productName =
-    device.productName ||
-    LOGITECH_PRODUCTS[device.productId] ||
-    `HID Peripheral (0x${device.vendorId.toString(16)}:${device.productId.toString(16)})`;
-
-  const deviceData: WebHIDDeviceData = {
-    vendorId: device.vendorId,
-    productId: device.productId,
-    productName,
-    opened: device.opened,
-    collections: (device.collections || []).map((c) => ({
-      usagePage: c.usagePage ?? 0xff00,
-      usage: c.usage ?? 0x0001,
-    })),
-    isSimulated: false,
+  return {
+    deviceData: mapNativeDeviceToData(device, Date.now() % 1000),
+    nativeDevice: device,
   };
-
-  return { deviceData, nativeDevice: device };
 }
 
 export function parseCustomHexStringToFrame(hexInput: string): TelemetryFrame {

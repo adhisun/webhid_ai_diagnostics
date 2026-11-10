@@ -20,6 +20,7 @@ import {
   getSimulatedDeviceMetadata,
 } from './services/simulatorService';
 import {
+  getAuthorizedPhysicalWebHIDDevices,
   hexToUint8Array,
   isWebHIDSupported,
   parseCustomHexStringToFrame,
@@ -41,15 +42,18 @@ import {
 
 export const App: React.FC = () => {
   const [device, setDevice] = useState<WebHIDDeviceData>(() =>
-    getSimulatedDeviceMetadata()
+    getSimulatedDeviceMetadata('mx-master-3s')
   );
+  const [pairedPhysicalMap, setPairedPhysicalMap] = useState<
+    Array<{ deviceData: WebHIDDeviceData; nativeDevice: NativeHIDDevice }>
+  >([]);
   const [nativeDevice, setNativeDevice] = useState<NativeHIDDevice | null>(null);
   const [activeScenario, setActiveScenario] =
     useState<ScenarioId>('rf_interference');
   const [tick, setTick] = useState<number>(0);
 
   const [currentFrame, setCurrentFrame] = useState<TelemetryFrame>(() => {
-    const initial = generateSimulatedFrame('rf_interference', 0);
+    const initial = generateSimulatedFrame('rf_interference', 0, 'mx-master-3s');
     privacyAuditSentry.recordLocalOperation('WEBHID_INGEST', initial.rawHex);
     return initial;
   });
@@ -101,14 +105,24 @@ export const App: React.FC = () => {
   const runDiagnosisOnFrame = useCallback(
     async (
       frame: TelemetryFrame,
-      remediationApplied: ResolutionActionType | null = null
+      remediationApplied: ResolutionActionType | null = null,
+      targetDeviceName?: string,
+      targetDeviceCategory?: WebHIDDeviceData['category']
     ) => {
       setIsAnalyzing(true);
+      const effectiveName = targetDeviceName || device.productName;
+      const effectiveCategory = targetDeviceCategory || device.category;
       try {
-        const result = await analyzeTelemetryWithLocalAi(frame);
+        const result = await analyzeTelemetryWithLocalAi(
+          frame,
+          effectiveCategory,
+          effectiveName
+        );
         const auditEntry = privacyAuditSentry.recordLocalOperation(
           'LOCAL_AI_PROMPT',
           JSON.stringify({
+            device: effectiveName,
+            category: effectiveCategory,
             frameId: frame.id,
             condition: result.conditionTitle,
             engine: result.engineUsed,
@@ -118,7 +132,7 @@ export const App: React.FC = () => {
         setAuditCount(privacyAuditSentry.getEntries().length);
 
         const report = privacyAuditSentry.generateComplianceReport(
-          device.productName
+          effectiveName
         );
         const bridgePayload = emitSupportBotPostMessage(
           result,
@@ -131,26 +145,91 @@ export const App: React.FC = () => {
         setIsAnalyzing(false);
       }
     },
-    [device.productName]
+    [device.productName, device.category]
   );
 
   useEffect(() => {
     checkChromeAiAvailability().then(setAiStatus);
+    getAuthorizedPhysicalWebHIDDevices().then((list) => {
+      if (list.length > 0) {
+        setPairedPhysicalMap(list);
+      }
+    });
   }, []);
 
   const ingestNewFrame = useCallback(
     (
       frame: TelemetryFrame,
-      remediationApplied: ResolutionActionType | null = null
+      remediationApplied: ResolutionActionType | null = null,
+      targetDeviceName?: string,
+      targetDeviceCategory?: WebHIDDeviceData['category']
     ) => {
       privacyAuditSentry.recordLocalOperation('WEBHID_INGEST', frame.rawHex);
       setCurrentFrame(frame);
       setFrameHistory((prev) => [frame, ...prev.slice(0, 19)]);
       setAuditCount(privacyAuditSentry.getEntries().length);
-      runDiagnosisOnFrame(frame, remediationApplied);
+      runDiagnosisOnFrame(
+        frame,
+        remediationApplied,
+        targetDeviceName,
+        targetDeviceCategory
+      );
     },
     [runDiagnosisOnFrame]
   );
+
+  const handleSelectCatalogDevice = (catalogId: string) => {
+    if (nativeDevice && nativeDevice.opened) {
+      nativeDevice.close().catch(() => {});
+    }
+    setNativeDevice(null);
+    const meta = getSimulatedDeviceMetadata(catalogId);
+    setDevice(meta);
+    setConnectionError(null);
+    setLastExecutionLog(null);
+
+    const nextTick = tick + 1;
+    setTick(nextTick);
+    const nextScenario =
+      activeScenario === 'custom_hex' ? 'rf_interference' : activeScenario;
+    const nextFrame = generateSimulatedFrame(nextScenario, nextTick, catalogId);
+    ingestNewFrame(nextFrame, null, meta.productName, meta.category);
+  };
+
+  const handleSelectPhysicalDevice = async (deviceId: string) => {
+    const match = pairedPhysicalMap.find((p) => p.deviceData.id === deviceId);
+    if (!match) return;
+
+    try {
+      if (!match.nativeDevice.opened) {
+        await match.nativeDevice.open();
+      }
+      setDevice(match.deviceData);
+      setNativeDevice(match.nativeDevice);
+      setConnectionError(null);
+      setLastExecutionLog(null);
+
+      const nextTick = tick + 1;
+      setTick(nextTick);
+      const nextFrame = generateSimulatedFrame(
+        activeScenario,
+        nextTick,
+        match.deviceData.id,
+        match.deviceData.productName,
+        match.deviceData.productId
+      );
+      ingestNewFrame(
+        nextFrame,
+        null,
+        match.deviceData.productName,
+        match.deviceData.category
+      );
+    } catch (err) {
+      setConnectionError(
+        err instanceof Error ? err.message : 'Unable to open physical HID device.'
+      );
+    }
+  };
 
   const handleSelectScenario = (scenario: ScenarioId) => {
     setActiveScenario(scenario);
@@ -160,7 +239,7 @@ export const App: React.FC = () => {
     if (scenario === 'custom_hex') {
       try {
         const customFrame = parseCustomHexStringToFrame(customHexInput);
-        ingestNewFrame(customFrame, null);
+        ingestNewFrame(customFrame, null, device.productName, device.category);
       } catch (err) {
         setConnectionError(
           err instanceof Error ? err.message : 'Invalid custom hex input'
@@ -171,8 +250,14 @@ export const App: React.FC = () => {
 
     const nextTick = tick + 1;
     setTick(nextTick);
-    const nextFrame = generateSimulatedFrame(scenario, nextTick);
-    ingestNewFrame(nextFrame, null);
+    const nextFrame = generateSimulatedFrame(
+      scenario,
+      nextTick,
+      device.id,
+      device.productName,
+      device.productId
+    );
+    ingestNewFrame(nextFrame, null, device.productName, device.category);
   };
 
   const handleSampleNextFrame = () => {
@@ -182,8 +267,14 @@ export const App: React.FC = () => {
     }
     const nextTick = tick + 1;
     setTick(nextTick);
-    const nextFrame = generateSimulatedFrame(activeScenario, nextTick);
-    ingestNewFrame(nextFrame, null);
+    const nextFrame = generateSimulatedFrame(
+      activeScenario,
+      nextTick,
+      device.id,
+      device.productName,
+      device.productId
+    );
+    ingestNewFrame(nextFrame, null, device.productName, device.category);
   };
 
   const handleInjectCustomHex = () => {
@@ -191,7 +282,7 @@ export const App: React.FC = () => {
       setConnectionError(null);
       setLastExecutionLog(null);
       const customFrame = parseCustomHexStringToFrame(customHexInput);
-      ingestNewFrame(customFrame, null);
+      ingestNewFrame(customFrame, null, device.productName, device.category);
     } catch (err) {
       setConnectionError(
         err instanceof Error ? err.message : 'Failed to parse custom hex report.'
@@ -205,13 +296,33 @@ export const App: React.FC = () => {
       const connected = await requestPhysicalWebHIDDevice(false);
       if (!connected) {
         setConnectionError(
-          'No physical peripheral was selected in the browser chooser. Continuing in Simulated Hardware Mode.'
+          'No physical peripheral was selected in the browser chooser. Use the dropdown to select any Logitech device model.'
         );
         return;
       }
 
+      setPairedPhysicalMap((prev) => [
+        connected,
+        ...prev.filter(
+          (p) => p.deviceData.productId !== connected.deviceData.productId
+        ),
+      ]);
       setDevice(connected.deviceData);
       setNativeDevice(connected.nativeDevice);
+
+      const initialFrame = generateSimulatedFrame(
+        activeScenario,
+        tick + 1,
+        connected.deviceData.id,
+        connected.deviceData.productName,
+        connected.deviceData.productId
+      );
+      ingestNewFrame(
+        initialFrame,
+        null,
+        connected.deviceData.productName,
+        connected.deviceData.category
+      );
 
       connected.nativeDevice.addEventListener('inputreport', (event) => {
         const parsed = parseHidReportToFrame(
@@ -219,30 +330,28 @@ export const App: React.FC = () => {
           event.data,
           activeScenario
         );
-        ingestNewFrame(parsed, null);
+        ingestNewFrame(
+          parsed,
+          null,
+          connected.deviceData.productName,
+          connected.deviceData.category
+        );
       });
     } catch (err) {
       setConnectionError(
         err instanceof Error
-          ? `${err.message} — Using Simulated Logitech MX Master 3S mode.`
+          ? `${err.message} — Select any Logitech model from the device dropdown.`
           : 'Unable to open WebHID device.'
       );
     }
   };
 
-  const handleSwitchToSimulator = () => {
-    if (nativeDevice && nativeDevice.opened) {
-      nativeDevice.close().catch(() => {});
-    }
-    setNativeDevice(null);
-    setDevice(getSimulatedDeviceMetadata());
-    setConnectionError(null);
-  };
-
   const handleExecuteResolution = async (actionType: ResolutionActionType) => {
     const { updatedFrame, executionLog } = applyResolutionAction(
       currentFrame,
-      actionType
+      actionType,
+      device.id,
+      device.category
     );
 
     if (nativeDevice && nativeDevice.opened) {
@@ -278,22 +387,25 @@ export const App: React.FC = () => {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         <DeviceSelector
+          activeDevice={device}
+          pairedPhysicalDevices={pairedPhysicalMap.map((p) => p.deviceData)}
           activeScenario={activeScenario}
-          isSimulated={device.isSimulated}
           webHidSupported={webHidSupported}
           customHexInput={customHexInput}
           connectionError={connectionError}
+          onSelectCatalogDevice={handleSelectCatalogDevice}
+          onSelectPhysicalDevice={handleSelectPhysicalDevice}
           onSelectScenario={handleSelectScenario}
           onCustomHexChange={setCustomHexInput}
           onInjectCustomHex={handleInjectCustomHex}
           onConnectPhysicalDevice={handleConnectPhysicalDevice}
-          onSwitchToSimulator={handleSwitchToSimulator}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <TelemetryViewer
             currentFrame={currentFrame}
             frameHistory={frameHistory}
+            deviceCategory={device.category}
             onSampleNextFrame={handleSampleNextFrame}
           />
 
@@ -318,6 +430,7 @@ export const App: React.FC = () => {
 
       <SupportBotDrawer
         isOpen={isSupportBotOpen}
+        deviceCategory={device.category}
         latestBridgeEvent={latestBridgeEvent}
         onToggleOpen={() => setIsSupportBotOpen(!isSupportBotOpen)}
         onTriggerScenarioFromBot={(scenario) => handleSelectScenario(scenario)}

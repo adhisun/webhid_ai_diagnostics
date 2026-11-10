@@ -9,7 +9,10 @@ import {
 import {
   applyResolutionAction,
   generateSimulatedFrame,
+  getScenarioDescriptorsForCategory,
+  getSimulatedDeviceMetadata,
 } from '../simulatorService';
+import { LOGITECH_DEVICE_CATALOG } from '../../types/webhid';
 import {
   analyzeTelemetryWithLocalAi,
   checkChromeAiAvailability,
@@ -73,6 +76,37 @@ describe('Hardware Telemetry Simulator & Resolution Engine', () => {
     const fwFrame = generateSimulatedFrame('firmware_desync', 1);
     expect(fwFrame.metrics.nvramSyncValid).toBe(false);
     expect(fwFrame.metrics.pollingRateHz).toBe(125);
+  });
+
+  it('supports the full Logitech multi-category catalog (Keyboards, Headsets, Webcams, Gaming, Receivers)', () => {
+    expect(LOGITECH_DEVICE_CATALOG.length).toBeGreaterThanOrEqual(18);
+
+    const keyboardMeta = getSimulatedDeviceMetadata('mx-keys-s');
+    expect(keyboardMeta.category).toBe('Keyboards');
+    expect(keyboardMeta.productName).toContain('MX Keys S');
+
+    const headsetFrame = generateSimulatedFrame('healthy_nominal', 0, 'zone-wireless-2');
+    expect(headsetFrame.metrics.firmwareVersion).toContain('ZNW02.14');
+
+    const gamingFrame = generateSimulatedFrame('healthy_nominal', 0, 'g-pro-x-superlight-2');
+    expect(gamingFrame.metrics.pollingRateHz).toBe(4000);
+    expect(gamingFrame.metrics.firmwareVersion).toContain('GPR32.04');
+  });
+
+  it('adapts scenario cards, AI diagnoses, and 1-click fixes specifically for Logitech BRIO Webcams', async () => {
+    const webcamScenarios = getScenarioDescriptorsForCategory('Webcams & ConferenceCams');
+    expect(webcamScenarios[0].shortTag).toBe('UVC Bandwidth');
+    expect(webcamScenarios[1].shortTag).toBe('VBUS Power Sag');
+    expect(webcamScenarios[2].shortTag).toBe('AF/HDR Desync');
+
+    const brioDropFrame = generateSimulatedFrame('rf_interference', 0, 'brio-4k-pro');
+    const brioDiag = await analyzeTelemetryWithLocalAi(
+      brioDropFrame,
+      'Webcams & ConferenceCams',
+      'Logitech BRIO'
+    );
+    expect(brioDiag.conditionTitle).toContain('USB 2.0 Bandwidth Fallback & UVC Frame Drop');
+    expect(brioDiag.recommendedActions[0].label).toContain('Renegotiate USB 3.0 SuperSpeed UVC Pipe');
   });
 
   it('heals telemetry metrics when one-click resolution actions are applied', () => {

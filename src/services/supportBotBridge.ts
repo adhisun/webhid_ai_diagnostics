@@ -41,7 +41,10 @@ export function mapCustomerSymptomToScenario(input: string): ScenarioId {
     lower.includes('charge') ||
     lower.includes('die') ||
     lower.includes('power') ||
-    lower.includes('volt')
+    lower.includes('volt') ||
+    lower.includes('vbus') ||
+    lower.includes('flicker') ||
+    lower.includes('backlight')
   ) {
     return 'battery_degradation';
   }
@@ -51,7 +54,11 @@ export function mapCustomerSymptomToScenario(input: string): ScenarioId {
     lower.includes('firmware') ||
     lower.includes('poll') ||
     lower.includes('125') ||
-    lower.includes('nvram')
+    lower.includes('nvram') ||
+    lower.includes('focus') ||
+    lower.includes('hdr') ||
+    lower.includes('mute') ||
+    lower.includes('layout')
   ) {
     return 'firmware_desync';
   }

@@ -14,6 +14,7 @@ import {
   ResolutionActionType,
   ScenarioId,
 } from '../types/diagnostics';
+import { WebHIDDeviceData } from '../types/webhid';
 import {
   mapCustomerSymptomToScenario,
   SupportBotPostMessageEvent,
@@ -22,25 +23,51 @@ import {
 
 interface SupportBotDrawerProps {
   isOpen: boolean;
+  deviceCategory?: WebHIDDeviceData['category'];
   latestBridgeEvent: SupportBotPostMessageEvent;
   onToggleOpen: () => void;
   onTriggerScenarioFromBot: (scenario: ScenarioId, customerText: string) => void;
   onExecuteFixFromBot: (actionType: ResolutionActionType) => void;
 }
 
-const SYMPTOM_PRESETS = [
-  'My mouse cursor keeps stuttering near my USB 3.0 hub',
-  'My battery dies suddenly at 30% reported charge',
-  'Cursor feels slow (125Hz) after waking laptop from sleep',
-];
+function getSymptomPresets(category?: WebHIDDeviceData['category']): string[] {
+  if (category === 'Webcams & ConferenceCams') {
+    return [
+      'My BRIO 4K video stutters and drops frames on my USB hub',
+      'Webcam flickers or resets when 4K HDR power load spikes',
+      'Autofocus is hunting and RightLight HDR locked after sleep',
+    ];
+  }
+  if (category === 'Keyboards') {
+    return [
+      'My keyboard drops keystrokes near my USB 3.0 dock',
+      'Keyboard backlight stays on and drains battery rapidly',
+      'Media keys and Fn-row layout stuck after waking laptop',
+    ];
+  }
+  if (category === 'Headsets & Audio') {
+    return [
+      'Audio sounds robotic with dropouts during Teams calls',
+      'Headset battery voltage sags when Hybrid ANC is active',
+      'Flip-to-mute boom mic state is out of sync with Zoom',
+    ];
+  }
+  return [
+    'My mouse cursor keeps stuttering near my USB 3.0 hub',
+    'My battery dies suddenly at 30% reported charge',
+    'Cursor feels slow (125Hz) after waking laptop from sleep',
+  ];
+}
 
 export const SupportBotDrawer: React.FC<SupportBotDrawerProps> = ({
   isOpen,
+  deviceCategory,
   latestBridgeEvent,
   onToggleOpen,
   onTriggerScenarioFromBot,
   onExecuteFixFromBot,
 }) => {
+  const symptomPresets = getSymptomPresets(deviceCategory);
   const [inputText, setInputText] = useState('');
   const [showRawBridgeJson, setShowRawBridgeJson] = useState(false);
   const [messages, setMessages] = useState<SupportChatMessage[]>(() => [
@@ -242,7 +269,7 @@ export const SupportBotDrawer: React.FC<SupportBotDrawerProps> = ({
             CLICK A CUSTOMER SYMPTOM TO TEST BOT FLOW:
           </div>
           <div className="flex flex-col gap-1.5">
-            {SYMPTOM_PRESETS.map((symptom) => (
+            {symptomPresets.map((symptom) => (
               <button
                 key={symptom}
                 type="button"
